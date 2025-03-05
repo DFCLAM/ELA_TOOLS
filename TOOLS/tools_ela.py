@@ -395,16 +395,20 @@ class TeiParser_ELA(object):
                 # NOTE: cannot go recursive
                 expan = self._find('expan', node)
                 abbr = self._find('abbr', node)
-                expan_text = expan.text
-                abbr_text = abbr.text
-                if expan_text:
-                    tl.append(('*:*', expan_text))
-                elif abbr_text:
-                    tl.append(('*:*', abbr_text))
-                elif text:
-                    tl.append(('*:*', text))
-                if tail:
-                    tl.append(('*:*', tail))
+                if not expan: # fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
+                    expan = self._find('corr', node)
+                    abbr = self._find('sic', node)
+                if expan: # fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
+                    expan_text = expan.text
+                    abbr_text = abbr.text
+                    if expan_text:
+                        tl.append(('*:*', expan_text))
+                    elif abbr_text:
+                        tl.append(('*:*', abbr_text))
+                    elif text:
+                        tl.append(('*:*', text))
+                    if tail:
+                        tl.append(('*:*', tail))
             else:
                 if text:
                     tl.append(('*:%s' % lang, text))
@@ -569,7 +573,7 @@ class TeiParser_ELA(object):
                 if bibl:
                     source = self._find('title', bibl)
                     # WARNING: see above, in this case no sub-elements is valid
-                    if source is not None:
+                    if source: # is not None: fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
                         if 'ref' in source.attrib:
                             self._attributes['oclc-reference'] = source.attrib['ref']
                             self._attributes['source'] = F(source)
