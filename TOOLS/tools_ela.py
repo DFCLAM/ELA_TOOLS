@@ -95,7 +95,8 @@ STOPS_LIST = """
 a ab ac ad adhic aliqui aliquis an ante apud at atque aut autem cum cur de
 deinde dum e ego enim ergo es est et etiam etsi ex fio haec haud hic hoc
 iam idem igitur ille in infra inter interim ipse is ita magis modo mox nam
-ne nec necque neque nisi non nos o ob per possum post pro quae quam quare
+ne nec necque neque nisi non nos
+o ob per possum post pro quae quam quare
 qui quia quicumque quid quidem quilibet quis quisnam quisquam quisque
 quisquis quo quod quoniam sed si sic siue sive sub sui sum super suus tam
 tamen trans tu tum ubi uel uero unus ut vel vero
@@ -1018,6 +1019,11 @@ class GenericProcessor(object):
         else:
             return None
 
+# workaround for issue #2
+# https://github.com/DFCLAM/ELA_TOOLS/issues/2
+@staticmethod
+def issue_2_workaround(frequencies : dict):
+    return { ("NULL" if k == "null" else k) : v for k,v in frequencies.items() }
 
 # take a LatinProcessor and return a dictionary with all extracted data
 def lproc_to_dict(lp):
@@ -1026,7 +1032,7 @@ def lproc_to_dict(lp):
     lemmas_number = len(lp.lemmas)
     lemmas_number_nostops = len(lp.lemmas_nostops)
     types_number = len(lp.types)
-    word_frequencies = lp.get_word_frequencies()
+    word_frequencies = issue_2_workaround(lp.get_word_frequencies())
     stop_frequencies = {}   # TODO: should be a dict comprehension
     word_frequencies_nostops = {}
     for x in word_frequencies:
@@ -1034,7 +1040,7 @@ def lproc_to_dict(lp):
             stop_frequencies[x] = word_frequencies[x]
         else:
             word_frequencies_nostops[x] = word_frequencies[x]
-
+    
     try:
         ttr = types_number / words_number
     except ZeroDivisionError as e:
@@ -1054,10 +1060,10 @@ def lproc_to_dict(lp):
         'types_max_length': lp.types_max_len,
         'types_mean_length': lp.types_average_len,
         'word_lemma_list': lp.words_lemmas,
-        'word_frequencies': word_frequencies,
-        'stop_frequencies': stop_frequencies,
-        'word_frequencies_nostops': word_frequencies_nostops,
-        'lemma_frequencies': lp.get_lemma_frequencies(),
+        'word_frequencies': issue_2_workaround(word_frequencies),
+        'stop_frequencies': issue_2_workaround(stop_frequencies),
+        'word_frequencies_nostops': issue_2_workaround(word_frequencies_nostops),
+        'lemma_frequencies': issue_2_workaround(lp.get_lemma_frequencies()),
         'ttr': ttr,
     }
 
@@ -1081,8 +1087,8 @@ def gproc_to_dict(lp):
         'types_min_length': lp.types_min_len,
         'types_max_length': lp.types_max_len,
         'types_mean_length': lp.types_average_len,
-        'word_frequencies': lp.get_word_frequencies(),
-        'word_frequencies_casesensitive': lp.get_word_frequencies(True),
+        'word_frequencies': issue_2_workaround(lp.get_word_frequencies()),
+        'word_frequencies_casesensitive': issue_2_workaround(lp.get_word_frequencies(True)),
         'ttr': ttr,
     }
 
