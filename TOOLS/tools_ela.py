@@ -36,6 +36,7 @@ import json
 import argparse
 import configparser
 import sqlite3 as db
+import traceback
 
 from cltk.tokenize.line import LineTokenizer
 from cltk.tokenize.word import WordTokenizer
@@ -50,7 +51,7 @@ from nltk.util import ngrams as nltk_ngrams
 
 # TEI handling
 # from tei_reader import TeiReader
-import xml.etree.ElementTree as xml_ET
+from xml.etree.ElementTree import fromstring, iselement
 
 # partialize open function to expressedly use UTF-8
 from functools import partial
@@ -234,12 +235,12 @@ class TeiParser_ELA(object):
         self._default_language = 'lat'
 
     # properties
-    text_body = property(lambda s: s._text_body if s._xmlroot else None)
-    text_front = property(lambda s: s._text_front if s._xmlroot else None)
-    text_head = property(lambda s: s._text_head if s._xmlroot else None)
-    names = property(lambda s: s._names if s._xmlroot else None)
-    dates = property(lambda s: s._dates if s._xmlroot else None)
-    attributes = property(lambda s: s._attributes if s._xmlroot else None)
+    text_body = property(lambda s: s._text_body if iselement(s._xmlroot) else None)
+    text_front = property(lambda s: s._text_front if iselement(s._xmlroot) else None)
+    text_head = property(lambda s: s._text_head if iselement(s._xmlroot) else None)
+    names = property(lambda s: s._names if iselement(s._xmlroot) else None)
+    dates = property(lambda s: s._dates if iselement(s._xmlroot) else None)
+    attributes = property(lambda s: s._attributes if iselement(s._xmlroot) else None)
 
     # debug the tree
     def dbg_getRoot(self):
@@ -247,10 +248,10 @@ class TeiParser_ELA(object):
 
     # internals
     def _find(self, tag, fromnode=None, mandatory=False):
-        if not self._xmlroot:
+        if not iselement(self._xmlroot):
             return []
         else:
-            if not fromnode:
+            if not iselement(fromnode):
                 node = self._xmlroot
             else:
                 node = fromnode
@@ -264,10 +265,10 @@ class TeiParser_ELA(object):
                 return li[0]
 
     def _finds(self, tag, fromnode=None):
-        if not self._xmlroot:
+        if not iselement(self._xmlroot):
             return []
         else:
-            if not fromnode:
+            if not iselement(fromnode):
                 node = self._xmlroot
             else:
                 node = fromnode
@@ -399,7 +400,7 @@ class TeiParser_ELA(object):
                 if not expan: # fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
                     expan = self._find('corr', node)
                     abbr = self._find('sic', node)
-                if expan: # fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
+                if iselement(expan): # fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
                     expan_text = expan.text
                     abbr_text = abbr.text
                     if expan_text:
@@ -507,7 +508,7 @@ class TeiParser_ELA(object):
                 self._text_body.append((t, lang, s))
 
     def _parse(self):
-        if not self._xmlroot:
+        if not iselement(self._xmlroot):
             self._attributes = {}
             self._names = {}
             self._text_body = []
@@ -532,7 +533,7 @@ class TeiParser_ELA(object):
             F = lambda node: self._zero_dash(self._flatten_text(node))
 
             # all of the following are ELA SPECIFIC
-            if fileDesc:
+            if iselement(fileDesc):
                 nodes = self._find('titleStmt', fileDesc)
                 for node in nodes:
                     tag = T(node.tag)
@@ -547,11 +548,12 @@ class TeiParser_ELA(object):
                     tag = T(node.tag)
                     if tag == 'tei:publisher':
                         child = self._find('ref', node)
-                        target = child.attrib['target'] if 'target' in child.attrib else '-'
-                        self._attributes['publisher'] = {
-                            'ref': target,
-                            'value': F(child),
-                        }
+                        if iselement(child):
+                            target = child.attrib['target'] if 'target' in child.attrib else '-'
+                            self._attributes['publisher'] = {
+                                'ref': target,
+                                'value': F(child),
+                            }
                     elif tag == 'tei:date':
                         # if 'when' in node.attrib:
                         #     date_iso = node.attrib['when']
@@ -571,10 +573,10 @@ class TeiParser_ELA(object):
                 sourceDesc = self._find('sourceDesc', fileDesc)
                 bibl = self._find('bibl', sourceDesc)
                 # WARNING: ElementTree evaluates to False if no sub-elements found
-                if bibl:
+                if iselement(bibl):
                     source = self._find('title', bibl)
                     # WARNING: see above, in this case no sub-elements is valid
-                    if source: # is not None: fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
+                    if iselement(source): # is not None: fixes https://github.com/DFCLAM/ELA_TOOLS/issues/1 #1
                         if 'ref' in source.attrib:
                             self._attributes['oclc-reference'] = source.attrib['ref']
                             self._attributes['source'] = F(source)
@@ -589,7 +591,7 @@ class TeiParser_ELA(object):
                             elif ino_type == 'dl':
                                 self._attributes['digitized'] = F(ino)
 
-            if profileDesc:
+            if iselement(profileDesc):
                 nodes = self._find('langUsage', profileDesc)
                 languages = []
                 for node in nodes:
@@ -654,7 +656,7 @@ class TeiParser_ELA(object):
                     if s:
                         self._attributes['editorialdecl'] = s
 
-            if revisionDesc:
+            if iselement(revisionDesc):
                 changes = self._finds('change', revisionDesc)
                 clist = []
                 for node in changes:
@@ -674,7 +676,7 @@ class TeiParser_ELA(object):
     # interface
     def feed(self, text):
         cleantext = self._suppress_pb_tags(text)
-        self._xmlroot = xml_ET.fromstring(cleantext)
+        self._xmlroot = fromstring(cleantext)
         self._parse()
 
     def read(self, filename):
@@ -1357,6 +1359,7 @@ def process_file(filebase,
                 latin_text = original_text
         except Exception as e:
             oerr("could not read '%s' (%s)" % (filebase, str(e)))
+            traceback.print_exc() # debug
             if logfile:
                 logfile.write('READ ERROR: %s / CAUSE: %s\n' % (
                               filebase, str(e)))
